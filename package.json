@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "deploy": "gh-pages -d out",
+    "deploy": "gh-pages -d out --nojekyll",
     "start": "next start",
     "lint": "eslint"
   },
