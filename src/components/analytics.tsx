@@ -13,8 +13,19 @@ const week = [
   { day: "S", min: 26 },
 ];
 
-const points = "0,64 30,52 60,42 90,46 120,30 150,22 180,26 210,14 240,8";
-const area = `0,64 30,52 60,42 90,46 120,30 150,22 180,26 210,14 240,8 240,80 0,80`;
+const confidence = [
+  [0, 64],
+  [30, 52],
+  [60, 42],
+  [90, 46],
+  [120, 30],
+  [150, 22],
+  [180, 26],
+  [210, 14],
+  [240, 8],
+];
+const points = `M${confidence.map(([x, y]) => `${x},${y}`).join(" L")}`;
+const area = `${points} L240,80 L0,80 Z`;
 
 export function Analytics() {
   const max = Math.max(...week.map((d) => d.min));
