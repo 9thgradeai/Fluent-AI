@@ -2,9 +2,11 @@
   "name": "landing",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://farhankabir133.github.io/FLUENT-AI",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "deploy": "gh-pages -d out",
     "start": "next start",
     "lint": "eslint"
   },
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "gh-pages": "^6.3.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
