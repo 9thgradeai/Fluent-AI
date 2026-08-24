@@ -6,8 +6,8 @@
 
 <p align="center">
   <b>FluentAI</b> is an AI-powered English communication coaching platform. This repository contains the
-  marketing landing page — a single-page, static, high-performance site that tells the FluentAI story, showcases
-  its features, and drives conversions.
+  full product: the marketing landing page, the authenticated learner app (dashboard, conversations, vocabulary),
+  and the production backend (Next.js API routes, Prisma + Postgres, session auth, and the AI coaching engine).
 </p>
 
 <p align="center">
@@ -73,15 +73,19 @@ All copy content (features, accents, testimonials, pricing, FAQs, nav) lives as 
 
 ## 🧱 Tech Stack
 
-- **[Next.js 15](https://nextjs.org)** — App Router, static export (`output: "export"`)
+- **[Next.js 15](https://nextjs.org)** — App Router, server rendering + API route handlers
 - **[React 19](https://react.dev)** — UI runtime
 - **[TypeScript](https://www.typescriptlang.org)** — strict typing throughout
 - **[Tailwind CSS v4](https://tailwindcss.com)** — utility-first styling with `@theme` design tokens
-- **[shadcn/ui](https://ui.shadcn.com)** — accessible Radix-based component primitives (`radix-ui`, `radix-lyra` style)
+- **[shadcn/ui](https://ui.shadcn.com)** — accessible Radix-based component primitives
+- **[Prisma](https://www.prisma.io)** + **PostgreSQL** — data layer, driver adapter (`@prisma/adapter-pg`), versioned migrations
+- **[Vercel AI SDK](https://ai-sdk.dev)** — streaming chat + structured output (OpenAI / Anthropic / local mock)
+- **[@node-rs/argon2](https://github.com/napi-rs/argon2)** — Argon2id password hashing; custom session auth with rotation
+- **[zod](https://zod.dev)** — request validation at every API boundary
+- **[Vitest](https://vitest.dev)** — unit tests
 - **[Framer Motion](https://www.framer.com/motion)** — scroll-reveal and stagger animations (reduced-motion aware)
 - **[lucide-react](https://lucide.dev)** & **[@phosphor-icons/react](https://phosphoricons.com)** — iconography
 - **[next/font/google](https://nextjs.org/docs/app/building-your-application/optimizing/fonts)** — **Sora** (headings) + **Inter** (body)
-- **[gh-pages](https://github.com/tschaub/gh-pages)** — deploy to GitHub Pages
 
 ---
 
@@ -89,23 +93,46 @@ All copy content (features, accents, testimonials, pricing, FAQs, nav) lives as 
 
 ```
 .
-├── public/                     # Static assets copied verbatim to the export root
-│   └── .nojekyll               # Disables Jekyll so GitHub Pages serves _next/ assets
+├── prisma/                     # Data layer
+│   ├── schema.prisma           # Models: users, sessions, conversations, messages, vocabulary, progress, XP, streaks, audit
+│   ├── migrations/             # Versioned SQL migrations
+│   └── seed.ts                 # Demo user + achievement catalog
 ├── src/
 │   ├── app/
 │   │   ├── globals.css         # Design tokens (light/dark), base styles, keyframes
 │   │   ├── layout.tsx          # Root layout: fonts, metadata/SEO, theme pre-paint script
-│   │   └── page.tsx            # Home page: composes every section + JSON-LD
+│   │   ├── page.tsx            # Landing: composes every section + JSON-LD
+│   │   ├── login/ register/ dashboard/ conversations/   # Authenticated app UI
+│   │   └── api/                # Backend route handlers
+│   │       ├── auth/*          # register, login, logout, me
+│   │       ├── conversations/* # list, create, single, streaming messages
+│   │       ├── vocabulary/*    # CRUD
+│   │       ├── flashcards/*    # spaced-repetition review
+│   │       ├── progress/*      # dashboard aggregates
+│   │       └── health          # liveness + DB check
 │   ├── components/
-│   │   ├── <section>/*.tsx     # One file per landing-page section (see table above)
-│   │   ├── layout.tsx          # <Container> + <Section> rhythm primitives
-│   │   ├── motion.tsx          # <Reveal> / <StaggerGroup> / <StaggerItem> animation wrappers
-│   │   ├── ui/*.tsx            # shadcn primitives (button, card, accordion, sheet, …)
+│   │   ├── <section>/*.tsx     # Landing-page sections
+│   │   ├── app/*.tsx           # App UI (chat, etc.)
+│   │   ├── ui/*.tsx            # shadcn primitives
 │   │   └── providers/          # ThemeProvider (light / dark / system)
 │   └── lib/
-│       ├── data.ts             # ALL site content + TypeScript types
-│       └── utils.ts            # cn() classname helper (clsx + tailwind-merge)
-├── next.config.ts              # Static export, basePath, assetPrefix
+│       ├── data.ts             # Landing site content + types
+│       ├── utils.ts            # cn() classname helper
+│       ├── types.ts            # Shared API response types
+│       ├── client.ts           # fetch wrapper + useAuth
+│       ├── http.ts             # RFC 7807 errors, rate limiting, api() wrapper
+│       ├── errors.ts           # problem+json error model
+│       ├── validation/         # zod request schemas
+│       ├── domain/learning.ts  # Pure XP / streak / SM-2 rules (unit-tested)
+│       ├── db/                 # Prisma client + repository layer
+│       ├── auth/               # Argon2id, session tokens, guard, cookies
+│       └── ai/                 # model gateway, streaming, grading, mock coach
+├── middleware.ts               # Protects /dashboard and /conversations
+├── next.config.ts              # Server build (no static export)
+├── prisma.config.ts            # Prisma CLI config (env, migrations, seed)
+├── docker-compose.yml          # Local Postgres
+├── .env.example                # Env template
+├── vitest.config.ts            # Unit test config
 ├── components.json             # shadcn/ui configuration
 ├── tsconfig.json               # Strict TS, @/* → ./src/* path alias
 └── package.json
@@ -120,86 +147,94 @@ relative paths.
 
 ## 🚀 Getting Started
 
-Prerequisites: **Node.js 18+** and **npm**.
+Prerequisites: **Node.js 18+**, **npm**, and **PostgreSQL** (see below).
+
+### 1. Start the database
 
 ```bash
-# 1. Install dependencies
-npm install
+# Option A — Docker (one command)
+docker compose up -d          # Postgres 16 on localhost:5432 (fluentai/fluentai)
 
-# 2. Run the dev server
+# Option B — Homebrew
+brew install postgresql@16
+/opt/homebrew/opt/postgresql@16/bin/pg_ctl -D /opt/homebrew/var/postgresql@16 start
+psql -d postgres -c "CREATE ROLE fluentai LOGIN PASSWORD 'fluentai' CREATEDB;"
+psql -d postgres -c "CREATE DATABASE fluentai OWNER fluentai;"
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env          # then set SESSION_SECRET (see the file)
+```
+
+### 3. Install, migrate, seed, run
+
+```bash
+npm install
+npm run db:migrate            # apply Prisma migrations
+npm run db:seed               # creates demo@fluentai.app / password123
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The page hot-reloads as you edit.
+Open [http://localhost:3000](http://localhost:3000). Register (or sign in as the demo user) and start a
+conversation. Without an AI API key the app uses a local demo coach; set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`
+in `.env` to get the full AI coach.
 
 ### Available scripts
 
 | Script | Command | What it does |
 |---|---|---|
 | `dev` | `npm run dev` | Start the development server |
-| `build` | `npm run build` | Static-export the site into `out/` |
+| `build` | `npm run build` | Generate the Prisma client, then build |
 | `start` | `npm run start` | Serve the production build locally |
 | `lint` | `npm run lint` | Run ESLint |
-| `deploy` | `npm run deploy` | Publish `out/` to the `gh-pages` branch |
+| `typecheck` | `npm run typecheck` | Type-check with `tsc --noEmit` |
+| `test` | `npm run test` | Run the Vitest unit suite |
+| `db:migrate` | `npm run db:migrate` | Apply Prisma migrations locally |
+| `db:deploy` | `npm run db:deploy` | Apply migrations in CI/production |
+| `db:seed` | `npm run db:seed` | Seed the database |
+| `db:studio` | `npm run db:studio` | Open Prisma Studio |
 
 ---
 
-## 🌐 Deployment (GitHub Pages)
+## 🌐 Deployment (Vercel)
 
-This site is configured as a **static export** hosted on **GitHub Pages** at:
-`https://farhankabir133.github.io/FLUENT-AI/`
+The app — landing page, authenticated dashboard, and API — is a single Next.js app deployed to **Vercel** (Fluid
+Compute) with a managed **Neon Postgres**. It is **not** a static export; it requires a server runtime and a
+database.
 
-### Configuration
+### 1. Create the project
 
-`next.config.ts` is the source of truth:
+Push this repo to GitHub and import it in Vercel. Set the framework to **Next.js** (auto-detected).
 
-```ts
-output: "export",       // static, framework-agnostic HTML/JS/CSS
-images: { unoptimized: true },
-trailingSlash: true,
-basePath: "/FLUENT-AI", // matches the repo name → project site path
-assetPrefix: "/FLUENT-AI/",
-```
+### 2. Provision a database
 
-Because GitHub Pages serves this as a **project site** at the `/FLUENT-AI` subpath, `basePath` and `assetPrefix`
-prefix every internal asset URL so they resolve correctly on the live site.
+Add **Neon Postgres** from the Vercel Marketplace (or any Postgres provider) and copy its connection string.
 
-### The Jekyll gotcha (important)
+### 3. Set environment variables
 
-GitHub Pages runs **Jekyll** by default, and Jekyll **refuses to serve any path starting with `_`** — so the entire
-`_next/` directory (all JS/CSS/fonts) silently 404s, leaving a broken page.
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Neon pooled connection string |
+| `SESSION_SECRET` | ✅ | Long random string (≥32 chars). `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `APP_URL` | ✅ | Production URL, e.g. `https://<your-app>.vercel.app` |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | optional | Omit to run on the local demo coach |
+| `AI_PROVIDER` | optional | `openai` or `anthropic` |
 
-The fix is an empty **`.nojekyll`** file at the export root, which disables Jekyll processing. It is:
+### 4. Deploy
 
-1. Kept in `public/` so it ships with every build, **and**
-2. Explicitly created on deploy via the `--nojekyll` flag:
+`npm run build` runs `prisma generate` automatically. Run `npm run db:deploy` once against production (or a
+`predev`/`postinstall` hook) to apply migrations, then `npm run db:seed` if you want the demo user.
 
-```json
-"deploy": "gh-pages -d out --nojekyll"
-```
-
-> ⚠️ The `--nojekyll` flag is required: `gh-pages` defaults to `dotfiles: false` and would drop a hand-placed
-> `.nojekyll` file during copy. The flag creates it directly in the published branch.
-
-### How to publish
-
-After making changes:
-
-```bash
-npm run build && npm run deploy
-```
-
-This regenerates `out/` and pushes it to the `gh-pages` branch. GitHub Pages (configured in the repo's **Settings →
-Pages** to serve from the `gh-pages` branch `/` root) automatically serves the new build. Give it ~1 minute to
-propagate.
-
-> **Note:** `out/` is gitignored — it's only ever committed to `gh-pages`, never to `main`. Keep `main` for source.
+> **Note:** Vercel provides the production `DATABASE_URL`; `next.config.ts` no longer contains the GitHub Pages
+> static-export settings (`output: "export"`, `basePath`, `assetPrefix`).
 
 ### Verify a deploy
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" https://farhankabir133.github.io/FLUENT-AI/
-# 200
+curl -s https://<your-app>.vercel.app/api/health
+# {"status":"ok","db":"up",...}
 ```
 
 ---

@@ -1,4 +1,8 @@
+"use client";
+
 import { Star, Quote } from "lucide-react";
+import Image from "next/image";
+import { ClientLogo } from "@/components/ClientLogo";
 import { testimonials } from "@/lib/data";
 import { Container, Section } from "@/components/layout";
 import { SectionHeader } from "@/components/section-header";
@@ -31,6 +35,23 @@ export function Testimonials() {
           description="From job seekers to founders, people use FluentAI to speak up — and it shows."
         />
 
+        {/* Client logos */}
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-8 opacity-60 grayscale">
+          {testimonials.slice(0, 3).map((t, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Image
+                src={`https://placehold.co/40x40/${initials(t.name)}`}
+                alt={`${t.name} avatar`}
+                width={40}
+                height={40}
+                className="rounded-full object-cover"
+                aria-hidden="true"
+              />
+              <span className="text-xs font-medium">{t.name.split(",")[0]}</span>
+            </div>
+          ))}
+        </div>
+
         <StaggerGroup className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {testimonials.map((t, i) => (
             <StaggerItem key={t.name}>
@@ -43,18 +64,14 @@ export function Testimonials() {
                   </div>
                   <Quote className="mb-3 size-5 text-signal/50" aria-hidden="true" />
                   <blockquote className="text-sm leading-relaxed text-foreground">
-                    “{t.quote}”
+                    &ldquo;{t.quote}&rdquo;
                   </blockquote>
                 </div>
                 <figcaption className="flex items-center gap-3 border-t border-border pt-4">
-                  <span
-                    className={`grid size-10 shrink-0 place-items-center rounded-full font-heading text-sm font-semibold ${
-                      avatarTones[i % avatarTones.length]
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {initials(t.name)}
-                  </span>
+                  <ClientLogo
+                    initials={initials(t.name)}
+                    colorClass={avatarTones[i % avatarTones.length]}
+                  />
                   <div>
                     <p className="text-sm font-medium text-foreground">{t.name}</p>
                     <p className="text-xs text-muted-foreground">{t.role}</p>

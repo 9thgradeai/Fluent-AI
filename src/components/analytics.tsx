@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Flame, BookOpen, Clock, Trophy, TrendingUp, Check } from "lucide-react";
 import { Container, Section } from "@/components/layout";
 import { SectionHeader } from "@/components/section-header";
@@ -28,7 +31,20 @@ const points = `M${confidence.map(([x, y]) => `${x},${y}`).join(" L")}`;
 const area = `${points} L240,80 L0,80 Z`;
 
 export function Analytics() {
+  const [confGain, setConfGain] = useState(24);
+  const [streak, setStreak] = useState(14);
+
+  // Simulate live metrics — increments every 8s for a "real-time" feel.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setConfGain((v) => Math.min(v + 1, 99));
+      setStreak((v) => v + 1);
+    }, 8000);
+    return () => clearInterval(id);
+  }, []);
+
   const max = Math.max(...week.map((d) => d.min));
+
   return (
     <Section id="analytics" className="bg-muted/30">
       <Container className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
@@ -38,7 +54,7 @@ export function Analytics() {
             {/* Stat tiles */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
-                { icon: Flame, label: "Streak", value: "14 days" },
+                { icon: Flame, label: "Streak", value: `${streak} days` },
                 { icon: BookOpen, label: "Words", value: "1,240" },
                 { icon: Clock, label: "Time", value: "8.5 hrs" },
                 { icon: Trophy, label: "Level", value: "B2" },
@@ -59,7 +75,7 @@ export function Analytics() {
                   Speaking confidence
                 </p>
                 <span className="rounded-full bg-signal/15 px-2 py-0.5 text-[11px] font-medium text-signal-soft-foreground">
-                  +24%
+                  +{confGain}%
                 </span>
               </div>
               <svg viewBox="0 0 240 80" className="h-24 w-full" role="img" aria-label="Speaking confidence growing steadily over time">

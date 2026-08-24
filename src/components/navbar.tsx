@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Menu, X, Sun, Moon } from "lucide-react";
+import Link from "next/link";
+import { Menu, X, Sun, Moon, Search } from "lucide-react";
 import { nav } from "@/lib/data";
 import { Logo } from "@/components/logo";
 import { LinkButton } from "@/components/link-button";
@@ -18,13 +19,61 @@ function ThemeToggle({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cn(
-        "grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        "grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted",
         className
       )}
     >
       <Sun className="size-[18px] dark:hidden" aria-hidden="true" />
       <Moon className="hidden size-[18px] dark:block" aria-hidden="true" />
     </button>
+  );
+}
+
+function SearchBar() {
+  const [query, setQuery] = React.useState("");
+  const [results, setResults] = React.useState<Array<{ title: string; url: string }>>([]);
+
+  const handleSearch = React.useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, this would call an API or filter data
+    setResults([
+      { title: "How to improve pronunciation", url: "#" },
+      { title: "Mastering business English", url: "#" },
+      { title: "Accent reduction techniques", url: "#" }
+    ]);
+  }, []);
+
+  return (
+    <div className="relative w-64">
+      <form onSubmit={handleSearch} className="w-full">
+        <input
+          type="text"
+          placeholder="Search FluentAI..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full rounded-full px-4 py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-signal/50"
+          aria-label="Search FluentAI content"
+        />
+        <button
+          type="submit"
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-signal/50 pointer-events-none"
+          aria-hidden="true"
+        >
+          <Search className="size-4" />
+        </button>
+      </form>
+      {results.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full rounded-lg border border-border bg-card shadow-lg max-h-48 overflow-y-auto">
+          {results.map((result, index) => (
+            <div key={index} className="px-3 py-2 hover:bg-muted/50 cursor-pointer">
+              <Link href={result.url} className="block text-sm font-medium">
+                {result.title}
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -39,7 +88,6 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Lock scroll when the mobile menu is open.
   React.useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
@@ -47,7 +95,6 @@ export function Navbar() {
     };
   }, [open]);
 
-  // Close the mobile menu with Escape.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -71,7 +118,12 @@ export function Navbar() {
       >
         <Logo />
 
-        <div className="hidden items-center gap-1 lg:flex">
+        {/* Search bar */}
+        <div className="hidden items-center gap-2 lg:flex">
+          <SearchBar />
+        </div>
+
+        <div className="hidden items-center gap-2 lg:flex">
           {nav.map((item) => (
             <a
               key={item.href}
@@ -84,13 +136,9 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <LinkButton href="#" variant="ghost" size="sm">
-            Sign in
-          </LinkButton>
-          <ThemeToggle />
-          <LinkButton href="#pricing" variant="signal" size="md">
-            Start free
-          </LinkButton>
+          <LinkButton href="/login" variant="ghost" size="sm">Sign in</LinkButton>
+          <ThemeToggle className="max-lg:flex" />
+          <LinkButton href="/register" variant="signal" size="md">Start free</LinkButton>
         </div>
 
         <div className="flex items-center gap-1 lg:hidden">
@@ -128,10 +176,10 @@ export function Navbar() {
             </a>
           ))}
           <div className="mt-3 flex flex-col gap-2 border-t border-border pt-4">
-            <LinkButton href="#" variant="outline" className="w-full">
+            <LinkButton href="/login" variant="outline" className="w-full">
               Sign in
             </LinkButton>
-            <LinkButton href="#pricing" variant="signal" className="w-full">
+            <LinkButton href="/register" variant="signal" className="w-full">
               Start free
             </LinkButton>
           </div>

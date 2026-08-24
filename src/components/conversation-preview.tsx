@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, PenLine, BookOpen, ThumbsUp, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Check, PenLine, BookOpen, ThumbsUp, Loader2, Play, Pause } from "lucide-react";
 import { Container, Section } from "@/components/layout";
 import { SectionHeader } from "@/components/section-header";
 import { Reveal } from "@/components/motion";
@@ -8,6 +9,33 @@ import { VoiceWaveform } from "@/components/voice-waveform";
 import { ScoreRing } from "@/components/score-ring";
 
 export function ConversationPreview() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playProgress, setPlayProgress] = useState(0);
+
+  // Simulate audio playback progress
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPlaying && playProgress < 100) {
+      interval = setInterval(() => {
+        setPlayProgress((prev) => {
+          if (prev >= 100) {
+            setIsPlaying(false);
+            return 100;
+          }
+          return prev + 1;
+        });
+      }, 100); // 10 seconds total progress
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, playProgress]);
+
+  const togglePlayback = () => {
+    if (playProgress >= 100) {
+      setPlayProgress(0); // Reset
+    }
+    setIsPlaying(!isPlaying);
+  };
+
   return (
     <Section id="conversation">
       <Container className="grid items-center gap-12 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
@@ -33,6 +61,37 @@ export function ConversationPreview() {
               </li>
             ))}
           </ul>
+
+          {/* Demo audio controls */}
+          <div className="mt-4 rounded-xl border border-border bg-card p-4">
+            <p className="mb-2 text-sm font-medium">Demo Recording</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={togglePlayback}
+                className="grid size-10 place-items-center rounded-full bg-signal/15 text-signal transition-colors hover:bg-signal/20"
+                aria-label={isPlaying ? "Pause demo recording" : "Play demo recording"}
+              >
+                {isPlaying ? <Pause className="size-4" /> : <Play className="size-4 ml-0.5" />}
+              </button>
+              <div className="flex-1">
+                <div className="h-2 w-full rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-signal transition-all duration-100"
+                    style={{ width: `${playProgress}%` }}
+                  />
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    {Math.floor(playProgress / 10)}:{playProgress % 10 < 10 ? `0${playProgress % 10}` : playProgress % 10}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">0:10</span>
+                </div>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Listen to a real coaching interaction between a learner and FluentAI.
+            </p>
+          </div>
         </div>
 
         {/* Transcript panel */}
@@ -95,7 +154,9 @@ export function ConversationPreview() {
             <div className="mt-5 flex items-center justify-between rounded-2xl border border-border bg-muted/40 px-4 py-3">
               <div className="flex items-center gap-3">
                 <VoiceWaveform bars={22} className="h-6 text-signal" />
-                <span className="text-xs text-muted-foreground">Analyzing your voice…</span>
+                <span className="text-xs text-muted-foreground">
+                  {isPlaying ? "Playing audio sample..." : "Analyzing your voice…"}
+                </span>
               </div>
               <span className="text-xs font-medium text-signal">Live</span>
             </div>

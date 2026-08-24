@@ -1,0 +1,393 @@
+// FluentAI — Prisma schema (Core MVP)
+// Scoped subset of docs/backend-architecture.md §5.
+// Deferred for later phases: embeddings/pgvector, payments, teams/orgs,
+// search, voice, notifications, storage, analytics events sink.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  active
+  disabled
+  suspended
+  deleted
+}
+
+enum SessionKind {
+  web
+  mobile
+  sdk
+}
+
+enum EnglishLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+}
+
+enum ConversationType {
+  free
+  roleplay
+  interview
+  meeting
+  ielts
+  toefl
+  business
+}
+
+enum Accent {
+  american
+  british
+  australian
+  canadian
+  irish
+  indian
+}
+
+enum ConversationStatus {
+  active
+  completed
+  aborted
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+enum AddedFrom {
+  manual
+  session
+  flashcard
+}
+
+enum VocabStatus {
+  new
+  learning
+  reviewing
+  mastered
+}
+
+enum Skill {
+  speaking
+  pronunciation
+  grammar
+  vocabulary
+  fluency
+}
+
+enum XpReason {
+  message_turn
+  conversation_completed
+  exercise_attempted
+  streak_bonus
+  daily_review
+  admin_adjustment
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String        @id @default(cuid())
+  email           String?       @unique // normalized to lowercase in app code
+  passwordHash    String?
+  status          UserStatus    @default(active)
+  emailVerifiedAt DateTime?
+  locale          String?       @default("en") @db.VarChar(8)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  profile          UserProfile?
+  sessions         UserSession[]
+  conversations    Conversation[]
+  vocabularyItems  VocabularyItem[]
+  flashcards       Flashcard[]
+  progress         LearningProgress[]
+  xpLedger         XpLedger[]
+  streak           Streak?
+  achievements     Achievement[]
+  idempotencyKeys  IdempotencyKey[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  userId          String        @id
+  displayName     String        @default("Learner")
+  avatarUrl       String?
+  targetLanguage  String        @default("English")
+  nativeLanguage  String        @default("en")
+  englishLevel    EnglishLevel  @default(B1)
+  goals           Json?
+  currentXp       Int           @default(0)
+  level           Int           @default(1)
+  timezone        String        @default("UTC")
+  settings        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model UserSession {
+  id               String       @id @default(cuid())
+  userId           String
+  kind             SessionKind  @default(web)
+  tokenHash        String       @unique
+  refreshTokenHash String       @unique
+  expiresAt        DateTime
+  lastActiveAt     DateTime     @default(now())
+  deviceId         String?
+  ip               String?
+  userAgent        String?
+  revokedAt        DateTime?
+  createdAt        DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Conversations & Learning
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id          String           @id @default(cuid())
+  userId      String
+  type        ConversationType @default(free)
+  accent      Accent           @default(american)
+  scenarioId  String?
+  title       String           @default("Conversation")
+  status      ConversationStatus @default(active)
+  startedAt   DateTime         @default(now())
+  endedAt     DateTime?
+  durationSec Int?
+  summary     String?
+  createdAt   DateTime         @default(now())
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+  summaries ConversationSummary[]
+
+  @@index([userId, createdAt])
+  @@index([type])
+  @@map("conversations")
+}
+
+model Message {
+  id              String      @id @default(cuid())
+  conversationId  String
+  role            MessageRole
+  content         String
+  language        String?     @default("en")
+  accent          Accent?
+  audioUrl        String?
+  audioDurationSec Int?
+  prosody         Json?
+  meta            Json?
+  createdAt       DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model ConversationSummary {
+  id             String   @id @default(cuid())
+  conversationId String
+  turnStart      Int      @default(0)
+  turnEnd        Int      @default(0)
+  summary        String
+  tokens         Int?
+  modelUsed      String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, turnStart])
+  @@map("conversation_summaries")
+}
+
+model VocabularyItem {
+  id          String       @id @default(cuid())
+  userId      String
+  term        String
+  definition  String?
+  example     String?
+  level       String?
+  wordClass   String?
+  addedFrom   AddedFrom    @default(manual)
+  status      VocabStatus  @default(new)
+  reviewCount Int          @default(0)
+  streakDays  Int          @default(0)
+  dueAt       DateTime     @default(now())
+  easeFactor  Float        @default(2.5)
+  intervalDays Int         @default(0)
+  createdAt   DateTime     @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcards Flashcard[]
+
+  @@unique([userId, term])
+  @@index([userId, status])
+  @@index([dueAt])
+  @@map("vocabulary_items")
+}
+
+model Flashcard {
+  id               String   @id @default(cuid())
+  userId           String
+  vocabularyItemId String?
+  front            String
+  back             String
+  intervalDays     Int      @default(0)
+  easeFactor       Float    @default(2.5)
+  reps             Int      @default(0)
+  nextReviewAt     DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyItem VocabularyItem? @relation(fields: [vocabularyItemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, nextReviewAt])
+  @@map("flashcards")
+}
+
+model LearningProgress {
+  id            String   @id @default(cuid())
+  userId        String
+  date          DateTime @db.Date
+  skill         Skill
+  minutes       Int      @default(0)
+  xp            Int      @default(0)
+  accuracyAvg   Float?
+  fluencyAvg    Float?
+  messagesCount Int      @default(0)
+  sessionsCount Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, skill])
+  @@index([userId, date])
+  @@map("learning_progress")
+}
+
+// ---------------------------------------------------------------------------
+// Gamification
+// ---------------------------------------------------------------------------
+
+model XpLedger {
+  id         String   @id @default(cuid())
+  userId     String
+  amount     Int
+  reason     XpReason
+  refId      String?
+  occurredAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@map("xp_ledger")
+}
+
+model Streak {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  currentStreak       Int      @default(0)
+  bestStreak          Int      @default(0)
+  currentStreakStart  DateTime?
+  lastActiveDate      DateTime? @db.Date
+  freezeAvailable     Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("streaks")
+}
+
+model Achievement {
+  id              String   @id @default(cuid())
+  userId          String? // null = catalog definition
+  code            String   @unique
+  title           String
+  description     String
+  icon            String?
+  criteria        Json?
+  progressCurrent Int      @default(0)
+  progressTarget  Int      @default(1)
+  isUnlocked      Boolean  @default(false)
+  unlockedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isUnlocked])
+  @@map("achievements")
+}
+
+// ---------------------------------------------------------------------------
+// Operations
+// ---------------------------------------------------------------------------
+
+model IdempotencyKey {
+  key            String   @id
+  userId         String?
+  method         String
+  path           String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@map("idempotency_keys")
+}
+
+model AuditLog {
+  id           String    @id @default(cuid())
+  actorUserId  String?
+  actorType    String
+  action       String
+  resourceType String?
+  resourceId   String?
+  before       Json?
+  after        Json?
+  ip           String?
+  userAgent    String?
+  requestId    String?
+  occurredAt   DateTime  @default(now())
+
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([resourceType, resourceId])
+  @@index([actorUserId])
+  @@index([occurredAt])
+  @@map("audit_logs")
+}
