@@ -5,6 +5,7 @@
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
+import { createOpenAI } from "@ai-sdk/openai";
 import { getResolvedProvider, getModelForProvider } from "../config/env";
 import { mockCoachReply } from "./mock";
 import { gradeMessage } from "./grade";
@@ -89,15 +90,27 @@ export function buildChatStream(opts: {
 }
 
 function providerStream(
-  provider: "openai" | "anthropic",
+  provider: "openai" | "anthropic" | "openai-compatible",
   system: string,
   turns: ChatTurn[],
 ): ReadableStream<Uint8Array> {
   const modelId = getModelForProvider(provider);
-  const model =
-    provider === "anthropic"
-      ? anthropic(modelId)
-      : openai(modelId);
+
+  let model;
+  if (provider === "anthropic") {
+    model = anthropic(modelId);
+  } else if (provider === "openai-compatible") {
+    const baseURL = process.env.AI_BASE_URL!;
+    const apiKey = process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY;
+    const compatibleProvider = createOpenAI({
+      baseURL,
+      ...(apiKey ? { apiKey } : {}),
+    });
+    model = compatibleProvider.chat(modelId);
+  } else {
+    model = openai(modelId);
+  }
+
   const result = streamText({
     model,
     system,

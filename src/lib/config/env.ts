@@ -11,11 +11,16 @@ const serverEnvSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
 
   // AI providers
-  AI_PROVIDER: z.enum(["openai", "anthropic", "mock"]).optional(),
+  AI_PROVIDER: z.enum(["openai", "anthropic", "openai-compatible", "mock"]).optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().optional(),
+
+  // OpenAI-compatible providers (vLLM, Ollama, Together AI, Groq, etc.)
+  AI_BASE_URL: z.string().url().optional(),
+  AI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().optional(),
 
   // Redis
   REDIS_URL: z.string().optional(),
@@ -55,22 +60,30 @@ export function getEnv(): ServerEnv {
   return _cached;
 }
 
-export function getResolvedProvider(): "openai" | "anthropic" | "mock" {
+export function getResolvedProvider(): "openai" | "anthropic" | "openai-compatible" | "mock" {
   const env = getEnv();
+
+  // Explicit provider selection
+  if (env.AI_PROVIDER === "openai-compatible" && env.AI_BASE_URL) return "openai-compatible";
   if (env.AI_PROVIDER === "anthropic" && env.ANTHROPIC_API_KEY) return "anthropic";
   if (env.AI_PROVIDER === "openai" && env.OPENAI_API_KEY) return "openai";
+
+  // Auto-detect from available keys (prefer openai-compatible if base URL set)
+  if (env.AI_BASE_URL) return "openai-compatible";
   if (env.OPENAI_API_KEY) return "openai";
   if (env.ANTHROPIC_API_KEY) return "anthropic";
   return "mock";
 }
 
-export function getModelForProvider(provider: "openai" | "anthropic" | "mock"): string {
+export function getModelForProvider(provider: "openai" | "anthropic" | "openai-compatible" | "mock"): string {
   const env = getEnv();
   switch (provider) {
     case "openai":
       return env.OPENAI_MODEL || "gpt-4o-mini";
     case "anthropic":
       return env.ANTHROPIC_MODEL || "claude-sonnet-5";
+    case "openai-compatible":
+      return env.AI_MODEL || "qwen/qwen-2.5-72b-instruct";
     default:
       return "fluentai-mock";
   }

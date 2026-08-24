@@ -4,6 +4,7 @@
 import type { ConversationModel } from "./ConversationProvider";
 import { OpenAIConversationProvider } from "./OpenAIProvider";
 import { AnthropicConversationProvider } from "./AnthropicProvider";
+import { OpenAICompatibleProvider } from "./OpenAICompatibleProvider";
 import { MockConversationProvider } from "./MockProvider";
 import { getResolvedProvider, getModelForProvider } from "../../../config/env";
 
@@ -16,6 +17,9 @@ export async function getConversationModel(): Promise<ConversationModel> {
   const modelId = getModelForProvider(providerName);
 
   switch (providerName) {
+    case "openai-compatible":
+      cachedProvider = new OpenAICompatibleProvider({ modelId });
+      break;
     case "openai":
       cachedProvider = new OpenAIConversationProvider(modelId);
       break;

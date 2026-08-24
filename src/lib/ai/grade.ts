@@ -3,7 +3,7 @@
 // deterministic heuristics so the app works offline.
 
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { feedbackSchema, type Feedback } from "./schemas";
 import { modelFor, type ProviderName } from "./provider";
@@ -30,9 +30,21 @@ async function llmGrade(opts: {
   type: ConversationType;
   provider: ProviderName;
 }): Promise<Feedback> {
-  const model = opts.provider === "anthropic"
-    ? anthropic(modelFor("anthropic"))
-    : openai(modelFor("openai"));
+  let model;
+  if (opts.provider === "anthropic") {
+    model = anthropic(modelFor("anthropic"));
+  } else if (opts.provider === "openai-compatible") {
+    const baseURL = process.env.AI_BASE_URL!;
+    const apiKey = process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY;
+    const compatibleProvider = createOpenAI({
+      baseURL,
+      ...(apiKey ? { apiKey } : {}),
+    });
+    model = compatibleProvider.chat(modelFor("openai-compatible"));
+  } else {
+    model = openai(modelFor("openai"));
+  }
+
   const { object } = await generateObject({
     model,
     schema: feedbackSchema,

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { redisHealthCheck } from "@/lib/cache";
 import { getResolvedProvider } from "@/lib/config/env";
+import { getConversationModel } from "@/lib/ai/providers/conversation";
 import { api } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -30,10 +31,22 @@ export const GET = api(async () => {
 
   // AI Provider check
   const provider = getResolvedProvider();
-  checks.aiProvider = {
-    status: provider === "mock" ? "mock_mode" : "configured",
-    detail: provider,
-  };
+  const aiStart = Date.now();
+  try {
+    const model = await getConversationModel();
+    const available = await model.isAvailable();
+    checks.aiProvider = {
+      status: available ? "healthy" : "unreachable",
+      latencyMs: Date.now() - aiStart,
+      detail: `${provider}:${model.modelId}`,
+    };
+  } catch {
+    checks.aiProvider = {
+      status: provider === "mock" ? "mock_mode" : "error",
+      latencyMs: Date.now() - aiStart,
+      detail: provider,
+    };
+  }
 
   const allHealthy = checks.database.status === "healthy";
 
